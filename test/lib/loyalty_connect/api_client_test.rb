@@ -30,15 +30,14 @@ module LoyaltyConnect
     end
 
     it "should include the version header" do
-      mock_token = Minitest::Mock.new
-      mock_token.expect :get, nil do |_, _, headers|
+      stub_oauth_wrapper = create_oauth_wrapper do |_, options|
+        assert options.has_key? :headers
+        headers = options[:headers]
         assert_includes headers.keys, 'X-API-Version'
         assert_equal '1.0.0', headers['X-API-Version']
       end
-      stub_oauth_wrapper = create_oauth_wrapper(mock_token)
       client = ApiClient.new stub_oauth_wrapper
       result = client.get "blah"
-      mock_token.verify
     end
 
     it "should call error handler on errors" do
