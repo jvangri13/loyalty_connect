@@ -17,32 +17,35 @@ module LoyaltyConnect
     end
 
     it "should raise errors by default" do
+      cache = self
       stub_oauth_token = Class.new do
-        def self.get _, _, _
-          raise OAuth2::HTTPError, "500"
+        define_method(:get) do |_, _, _|
+          raise cache.create_error_for(500)
         end
-      end
+      end.new
       stub_oauth_wrapper = create_oauth_wrapper(stub_oauth_token)
       client = ApiClient.new stub_oauth_wrapper
-      assert_raises OAuth2::HTTPError do
+      assert_raises OAuth2::Error do
         client.get "blah"
       end
     end
 
     it "should include the version header" do
-      stub_oauth_wrapper = create_oauth_wrapper do |_, options|
-        assert options.has_key? :headers
-        headers = options[:headers]
-        assert_includes headers.keys, 'X-API-Version'
-        assert_equal '1.0.0', headers['X-API-Version']
-      end
+      cache = self
+      stub_oauth_token = Class.new do
+        define_method(:get) do |_, _, headers|
+          cache.assert_includes headers.keys, 'X-API-Version'
+          cache.assert_equal '1.0.0', headers['X-API-Version']
+        end
+      end.new
+      stub_oauth_wrapper = create_oauth_wrapper(stub_oauth_token)
       client = ApiClient.new stub_oauth_wrapper
       result = client.get "blah"
     end
 
     it "should call error handler on errors" do
       yield_args = []
-      expected_exception = OAuth2::HTTPError.new("500")
+      expected_exception = create_error_for(500, "bad stuff")
       stub_oauth_token = Class.new do
         define_method(:get) do |_,_,_|
           raise expected_exception
@@ -61,5 +64,17 @@ module LoyaltyConnect
         define_method(:oauth_token) { token }
       end.new
     end
+
+    def create_error_for(code, message="")
+      stub_response = Class.new do
+        attr_accessor :error, :parsed, :body
+      end.new
+      stub_response.parsed = {
+        'error' => code,
+        'error_description' => message
+      }
+      OAuth2::Error.new(stub_response)
+    end
+
   end
 end
